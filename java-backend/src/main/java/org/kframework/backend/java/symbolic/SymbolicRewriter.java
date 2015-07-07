@@ -2,10 +2,7 @@
 package org.kframework.backend.java.symbolic;
 
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.BiMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import com.google.common.collect.*;
 import com.google.inject.Inject;
 import org.kframework.backend.java.builtins.BoolToken;
 import org.kframework.backend.java.builtins.FreshOperations;
@@ -22,6 +19,7 @@ import org.kframework.krun.api.KRunGraph;
 import org.kframework.krun.api.KRunState;
 import org.kframework.krun.api.SearchType;
 import org.kframework.utils.errorsystem.KEMException;
+import scala.collection.immutable.Stream;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -462,6 +460,18 @@ public class SymbolicRewriter {
             step++;
 //            System.err.println("step #" + step);
             for (ConstrainedTerm term : queue) {
+
+                /*
+                List<Term> queueK = new ArrayList<>();
+                for (ConstrainedTerm t : queue) {
+                    queueK.addAll(t.term().getCellContentsByName(CellLabel.K));
+                }
+                List<Term> termK = term.term().getCellContentsByName(CellLabel.K);
+                List<Term> targetTermK = targetTerm.term().getCellContentsByName(CellLabel.K);
+                Substitution<Variable, Term> termConstSubst = term.constraint().substitution();
+                PersistentUniqueList<Equality> termConstEq = term.constraint().equalities();
+                */
+
                 if (term.implies(targetTerm)) {
                     continue;
                 }
