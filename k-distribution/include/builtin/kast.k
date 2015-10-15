@@ -1,18 +1,26 @@
 // Copyright (c) 2015 K Team. All Rights Reserved.
 
 // Module defining only the sorts K and KString, useful for modularity
-module BASIC-K
-  syntax K
-  syntax KString ::= r"[\\\"](([^\\\"\n\r\\\\])|([\\\\][nrtf\\\"\\\\])|([\\\\][x][0-9a-fa-f]{2})|([\\\\][u][0-9a-fa-f]{4})|([\\\\][u][0-9a-fa-f]{8}))*[\\\"]"      [token, hook(org.kframework.kore.KString)]
-    // optionally qualified strings, like in Scala "abc", i"abc", r"a*bc", etc.
-  syntax KLabel
+module SORT-K
+  syntax K [hook(K.K)]
 endmodule
 
+module BASIC-K
+  imports SORT-K
+  syntax KLabel
+  syntax KItem [hook(K.KItem)]
+  syntax K     ::= KItem
+  syntax KConfigVar
+endmodule
+
+module KSTRING
+  syntax KString ::= r"[\\\"](([^\\\"\n\r\\\\])|([\\\\][nrtf\\\"\\\\])|([\\\\][x][0-9a-fA-F]{2})|([\\\\][u][0-9a-fA-F]{4})|([\\\\][U][0-9a-fA-F]{8}))*[\\\"]"      [token, hook(org.kframework.kore.KString)]
+  // optionally qualified strings, like in Scala "abc", i"abc", r"a*bc", etc.
+endmodule
 
 module KAST
   imports BASIC-K
-  syntax KItem
-  syntax K     ::= KItem
+  imports KSTRING
   syntax KBott ::= "#token" "(" KString "," KString ")"  [klabel(#KToken), hook(org.kframework.kore.KToken)]
                  | "#klabel" "(" KLabel ")"              [klabel(#WrappedKLabel), hook(org.kframework.kore.meta.WrappedKLabel)]
                  | KLabel "(" KList ")"                  [klabel(#KApply), hook(org.kframework.kore.KApply)]
@@ -26,7 +34,9 @@ module KAST
                  | ".KList"          [klabel(#EmptyKList), hook(org.kframework.kore.EmptyKList)]
                  | ".::KList"        [klabel(#EmptyKList), hook(org.kframework.kore.EmptyKList)]
                  | KList "," KList   [klabel(#KList), left, assoc, unit(#EmptyKList), hook(org.kframework.kore.KList), prefer]
-                 | KList ",," KList  [klabel(#KList), left, assoc, unit(#EmptyKList), hook(org.kframework.kore.KList), prefer]
+//TODO(dwightguth): there is some kind of weird issue with this production which is causing AddEmptyLists to behave incorrectly.
+// we need to fix this issue so we can add this production back.
+//                 | KList ",," KList  [klabel(#KList), left, assoc, unit(#EmptyKList), hook(org.kframework.kore.KList), prefer]
 endmodule
 
 
@@ -39,15 +49,13 @@ module KSEQ
                  | K "~>" K  [klabel(#KSequence), left, assoc, unit(#EmptyK), hook(org.kframework.kore.KSequence)]
   syntax left #KSequence
   syntax KBott     ::= "`" K "`"    [bracket]
-  syntax KBott     ::= "HOLE"       [klabel([])]
-  syntax KConfigVar
 endmodule
 
 
 // To be used when parsing/pretty-printing symbolic configurations
 module KSEQ-SYMBOLIC
   imports KSEQ
-  syntax #KVariable  ::= r"(?<![A-Za-z0-9_\\$!\\?])(\\!|\\?)?([A-Z][A-Za-z0-9'_]*|_)"   [token, autoReject, hook(org.kframework.kore.KVariable)]
+  syntax #KVariable ::= r"(?<![A-Za-z0-9_\\$!\\?])(\\!|\\?)?([A-Z][A-Za-z0-9'_]*|_)"   [token, autoReject, hook(org.kframework.kore.KVariable)]
   syntax KConfigVar ::= r"(?<![A-Za-z0-9_\\$!\\?])(\\$)([A-Z][A-Za-z0-9'_]*)"          [token, autoReject]
   syntax KBott      ::= #KVariable
   syntax KBott      ::= KConfigVar
@@ -68,6 +76,7 @@ endmodule
 
 module RULE-CELLS
   imports KCELLS
+  imports RULE-LISTS
   // if this module is imported, the parser automatically
   // generates, for all productions that have the attribute 'cell' or 'maincell',
   // a production like below:
@@ -79,8 +88,12 @@ endmodule
 
 module CONFIG-CELLS
   imports KCELLS
+  imports RULE-LISTS
   syntax #CellName ::= r"[a-zA-Z0-9\\-]+"  [token]
+
   syntax Cell ::= "<" #CellName #CellProperties ">" K "</" #CellName ">" [klabel(#configCell)]
+  syntax Cell ::= "<" #CellName "/>" [klabel(#externalCell)]
+
   syntax #CellProperties ::= #CellProperty #CellProperties [klabel(#cellPropertyList)]
                            | ""                            [klabel(#cellPropertyListTerminator)]
   syntax #CellProperty ::= #CellName "=" KString           [klabel(#cellProperty)]
@@ -141,6 +154,28 @@ module AUTO-FOLLOW
   // because it would turn the terminal into the terminal "ab".
 endmodule
 
+module PROGRAM-LISTS
+  imports SORT-K
+  // if this module is imported, the parser automatically
+  // replaces the default productions for lists:
+  // Es ::= E "," Es [userList("*"), klabel('_,_)]
+  //      | E        [userList("*")]
+  //      | ".Es"    [userList("*"), klabel('.Es)]
+  // into a series of productions more suitable for programs:
+  // Es#Terminator ::= ""      [klabel('.Es)]
+  // Ne#Es ::= E "," Ne#Es     [klabel('_,_)]
+  //         | E Es#Terminator [klabel('_,_)]
+  // Es ::= Ne#Es
+  //      | Es#Terminator      // if the list is *
+endmodule
+
+module RULE-LISTS
+  // if this module is imported, the parser automatically
+  // adds the subsort production to the parsing module only:
+  // Es ::= E        [userList("*")]
+
+endmodule
+
 module DEFAULT-CONFIGURATION
   imports BASIC-K
 
@@ -157,4 +192,12 @@ module K
   syntax KBott     ::= K "=>" K     [klabel(#KRewrite), hook(org.kframework.kore.KRewrite), non-assoc]
   syntax non-assoc #KRewrite
 
+endmodule
+
+// To be used to parse terms in full K
+module K-TERM
+  imports KSEQ-SYMBOLIC
+  imports K-SORT-LATTICE
+  imports AUTO-CASTS
+  imports AUTO-FOLLOW
 endmodule

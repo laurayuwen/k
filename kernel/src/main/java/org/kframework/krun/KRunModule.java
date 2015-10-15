@@ -1,6 +1,7 @@
 // Copyright (c) 2014-2015 K Team. All Rights Reserved.
 package org.kframework.krun;
 
+import com.beust.jcommander.JCommander;
 import com.google.common.reflect.TypeParameter;
 import com.google.common.reflect.TypeToken;
 import com.google.inject.AbstractModule;
@@ -12,10 +13,11 @@ import com.google.inject.TypeLiteral;
 import com.google.inject.matcher.Matchers;
 import com.google.inject.multibindings.MapBinder;
 import com.google.inject.multibindings.Multibinder;
+import com.google.inject.name.Named;
 import com.google.inject.spi.TypeEncounter;
 import com.google.inject.spi.TypeListener;
 import com.google.inject.throwingproviders.ThrowingProviderBinder;
-import org.kframework.Rewriter;
+import org.kframework.rewriter.Rewriter;
 import org.kframework.backend.unparser.BinaryOutputMode;
 import org.kframework.backend.unparser.ConcretizeTerm;
 import org.kframework.backend.unparser.KASTOutputMode;
@@ -43,6 +45,9 @@ import org.kframework.krun.api.SearchResults;
 import org.kframework.krun.api.Transition;
 import org.kframework.krun.api.io.FileSystem;
 import org.kframework.krun.ioserver.filesystem.portable.PortableFileSystem;
+import org.kframework.krun.modes.DebugMode.DebugExecutionMode;
+import org.kframework.krun.modes.ExecutionMode;
+import org.kframework.krun.modes.KRunExecutionMode;
 import org.kframework.krun.tools.Debugger;
 import org.kframework.krun.tools.Executor;
 import org.kframework.krun.tools.LtlModelChecker;
@@ -101,10 +106,10 @@ public class KRunModule extends AbstractModule {
             public <I> void hear(TypeLiteral<I> typeLiteral, TypeEncounter<I> typeEncounter) {
                 for (Field field : typeLiteral.getRawType().getDeclaredFields()) {
                     if (field.getType() == Transformation.class && field.isAnnotationPresent(InjectGeneric.class)) {
-                      TypeToken<?> fieldType = TypeToken.of(typeLiteral.getFieldType(field).getType());
-                      TypeToken<? extends TransformationProvider<?>> genericProviderTypeToken = providerOf(fieldType);
-                      TypeLiteral<? extends TransformationProvider<?>> genericProviderTypeLiteral = (TypeLiteral<? extends TransformationProvider<?>>) TypeLiteral.get(genericProviderTypeToken.getType());
-                      typeEncounter.register(new TransformationMembersInjector<I>(field, typeEncounter.getProvider(Key.get(genericProviderTypeLiteral))));
+                        TypeToken<?> fieldType = TypeToken.of(typeLiteral.getFieldType(field).getType());
+                        TypeToken<? extends TransformationProvider<?>> genericProviderTypeToken = providerOf(fieldType);
+                        TypeLiteral<? extends TransformationProvider<?>> genericProviderTypeLiteral = (TypeLiteral<? extends TransformationProvider<?>>) TypeLiteral.get(genericProviderTypeToken.getType());
+                        typeEncounter.register(new TransformationMembersInjector<I>(field, typeEncounter.getProvider(Key.get(genericProviderTypeLiteral))));
                     }
                 }
             }
@@ -198,7 +203,7 @@ public class KRunModule extends AbstractModule {
 
             MapBinder<String, Function<org.kframework.definition.Module, Rewriter>> rewriterBinder = MapBinder.newMapBinder(
                     binder(), TypeLiteral.get(String.class), new TypeLiteral<Function<org.kframework.definition.Module, Rewriter>>() {
-            });
+                    });
 
             MapBinder.newMapBinder(
                     binder(), String.class, LtlModelChecker.class);
@@ -207,7 +212,7 @@ public class KRunModule extends AbstractModule {
                     binder(), String.class, Prover.class);
 
             //TODO(cos): move to tiny module
-            rewriterBinder.addBinding("tiny").toInstance(m -> new org.kframework.tiny.Rewriter(m));
+            rewriterBinder.addBinding("tiny").toInstance(m -> new org.kframework.tiny.FullTinyRewriter(m));
 
             bind(Debugger.class).to(ExecutorDebugger.class);
 
@@ -218,6 +223,11 @@ public class KRunModule extends AbstractModule {
             bind(ConcretizeTerm.class);
 
             bind(FileSystem.class).to(PortableFileSystem.class);
+
+            MapBinder<ToolActivation, ExecutionMode> executionBinder = MapBinder.newMapBinder(binder(),
+                    ToolActivation.class, ExecutionMode.class);
+
+            executionBinder.addBinding(new ToolActivation.OptionActivation("--debugger")).to(DebugExecutionMode.class);
 
         }
 
@@ -257,6 +267,24 @@ public class KRunModule extends AbstractModule {
         }
 
         @Provides
+        ExecutionMode getExecutionMode(JCommander jc, Map<ToolActivation, Provider<ExecutionMode>> map, KRunOptions kRunOptions, KExceptionManager kem, FileUtil files) {
+            ExecutionMode res = null;
+            ToolActivation previous = null;
+            for (Map.Entry<ToolActivation, Provider<ExecutionMode>> entry : map.entrySet()) {
+                if (entry.getKey().isActive(jc)) {
+                    if (res != null) {
+                        throw KEMException.criticalError("Multiple tool activations found: " + entry.getKey() + " and " + previous);
+                    }
+                    res = entry.getValue().get();
+                    previous = entry.getKey();
+                }
+            }
+            if (res == null)
+                res = new KRunExecutionMode(kRunOptions, kem, files);
+            return res;
+        }
+
+        @Provides
         Prover getProver(KompileOptions options, Map<String, Provider<Prover>> map, KExceptionManager kem) {
             Provider<Prover> provider = map.get(options.backend);
             if (provider == null) {
@@ -272,6 +300,17 @@ public class KRunModule extends AbstractModule {
                     files.resolveKompiled("configuration.bin"));
             sw.printIntermediate("Reading configuration from binary");
             return cfg;
+        }
+
+
+        @Provides
+        @Named("checkpointIntervalValue")
+        Integer getCheckpointLength(KompileOptions options, @Named("checkpointIntervalMap") Map<String, Integer> map) {
+            Integer checkpointInterval = map.get(options.backend);
+            if (checkpointInterval == null) {
+                return new Integer(50);
+            }
+            return checkpointInterval;
         }
     }
 

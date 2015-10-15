@@ -2,10 +2,13 @@
 package org.kframework.compile;
 
 import org.kframework.kore.K;
+import org.kframework.kore.KApply;
 import org.kframework.kore.KLabel;
 import org.kframework.kore.Sort;
+import scala.Option;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Information about the configuration structure used
@@ -30,17 +33,40 @@ public interface ConfigurationInfo {
     /** True if sort k is actually a cell sort */
     boolean isCell(Sort k);
 
+    /** True if kLabel is the KLabel of a cell */
+    boolean isCellLabel(KLabel kLabel);
+
     /** True for cells which contain a term rather than other cells */
     boolean isLeafCell(Sort k);
 
     /** True for cells which contain other cells */
     boolean isParentCell(Sort k);
 
+    /** Set of cell bag sorts (e.g. ThreadCellBag) associated with a multiplicity * cell (e.g. ThreadCell).
+     *  Should not in most cases return more than one sort, but a user can write productions that would cause
+     *  this method to return multiple sorts, e.g. if a particular * cell appears in multiple bags in different
+     *  parts of a configuration.
+     */
+    scala.collection.immutable.Set<Sort> getCellBagSortsOfCell(Sort k);
+
     /** The declared sort of the contents of a leaf cell */
     Sort leafCellType(Sort k);
 
     /** The label for a cell */
     KLabel getCellLabel(Sort k);
+
+    /** The cell for a label */
+    Sort getCellSort(KLabel kLabel);
+
+    /** The label for a fragment of a cell, only defined for parent cells. */
+    KLabel getCellFragmentLabel(Sort k);
+
+    /**
+     * The constant label to use as an argument of a cell fragment,
+     * when the cell fragment did not capture cells of the argument type.
+     * Only defined for child cells of multiplicity other than *.
+     */
+    KLabel getCellAbsentLabel(Sort cellSort);
 
     /** Returns a term which is the default cell of sort k,
      * probably an initializer macro */
@@ -52,12 +78,20 @@ public interface ConfigurationInfo {
     Sort getRootCell();
     /** Return the declared computation cell, by default the k cell */
     Sort getComputationCell();
+    /** Returns the set of cell sorts in this configuration */
+    Set<Sort> getCellSorts();
 
     /** Returns the unit of a * or ? cell. */
-    K getUnit(Sort k);
+    KApply getUnit(Sort k);
 
     /** Returns the concatenation operation of a multiplicity * cell. */
     KLabel getConcat(Sort k);
+
+    /** Returns the cell associated with this concatenation label */
+    Option<Sort> getCellForConcat(KLabel concat);
+
+    /** Returns the cell associated with this unit */
+    Option<Sort> getCellForUnit(KApply unit);
 
     /** Declared mulitplicitly of a cell */
     enum Multiplicity {
@@ -66,5 +100,19 @@ public interface ConfigurationInfo {
         /** This cell is optional but may not be repeated */
         OPTIONAL,
         /** This cell may occur any number of times, zero or more */
-        STAR}
+        STAR;
+
+        public static Multiplicity of(String multiplicity) {
+            switch(multiplicity) {
+            case "1":
+                return ConfigurationInfo.Multiplicity.ONE;
+            case "*":
+                return ConfigurationInfo.Multiplicity.STAR;
+            case "?":
+                return ConfigurationInfo.Multiplicity.OPTIONAL;
+            default:
+                throw new IllegalArgumentException(multiplicity);
+            }
+        }
+    }
 }

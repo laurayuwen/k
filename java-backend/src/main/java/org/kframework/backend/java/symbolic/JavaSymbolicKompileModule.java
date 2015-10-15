@@ -4,16 +4,19 @@ package org.kframework.backend.java.symbolic;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provider;
 import com.google.inject.Provides;
+import com.google.inject.TypeLiteral;
 import com.google.inject.multibindings.MapBinder;
 import org.kframework.backend.Backend;
 import org.kframework.backend.java.indexing.IndexingAlgorithm;
 import org.kframework.backend.java.indexing.RuleIndex;
 import org.kframework.backend.java.kil.Definition;
 import org.kframework.backend.java.kil.GlobalContext;
+import org.kframework.kompile.CompiledDefinition;
 import org.kframework.krun.api.io.FileSystem;
 import org.kframework.krun.ioserver.filesystem.portable.PortableFileSystem;
 
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class JavaSymbolicKompileModule extends AbstractModule {
 
@@ -33,6 +36,10 @@ public class JavaSymbolicKompileModule extends AbstractModule {
         MapBinder<String, Backend> mapBinder = MapBinder.newMapBinder(
                 binder(), String.class, Backend.class);
         mapBinder.addBinding("java").to(JavaSymbolicBackend.class);
+
+        MapBinder<String, org.kframework.kore.compile.Backend> koreBackendBinder = MapBinder.newMapBinder(
+                binder(), String.class, org.kframework.kore.compile.Backend.class);
+        koreBackendBinder.addBinding("java").to(JavaBackend.class);
     }
 
     @Provides

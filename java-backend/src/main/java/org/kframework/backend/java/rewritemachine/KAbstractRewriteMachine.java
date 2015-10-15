@@ -8,7 +8,7 @@ import org.kframework.backend.java.kil.*;
 import org.kframework.backend.java.kil.CellCollection.Cell;
 import org.kframework.backend.java.rewritemachine.RHSInstruction.Constructor;
 import org.kframework.backend.java.symbolic.DeepCloner;
-import org.kframework.backend.java.symbolic.NonACPatternMatcher;
+import org.kframework.backend.java.symbolic.PatternMatcher;
 import org.kframework.backend.java.symbolic.RuleAuditing;
 import org.kframework.backend.java.symbolic.Substitution;
 import org.kframework.backend.java.util.Profiler;
@@ -47,7 +47,7 @@ public class KAbstractRewriteMachine {
     private boolean success = true;
     private boolean isStarNested = false;
 
-    private final NonACPatternMatcher patternMatcher;
+    private final PatternMatcher matcher;
 
     private final TermContext context;
 
@@ -56,7 +56,7 @@ public class KAbstractRewriteMachine {
         this.subject = subject;
         this.instructions = rule.matchingInstructions();
         this.context = context;
-        this.patternMatcher = new NonACPatternMatcher(context);
+        this.matcher = new PatternMatcher(false, true, context);
     }
 
     public static boolean rewrite(Rule rule, CellCollection.Cell subject, TermContext context) {
@@ -109,20 +109,20 @@ public class KAbstractRewriteMachine {
             Map<Variable, Term> solution, Set<Variable> reusableVariables, TermContext context,
             boolean doClone) {
 
+        /* Special case for one-instruction lists that can be resolved without a stack;
+         * The code falls through the general case. */
         if (rhsInstructions.size() == 1) {
             RHSInstruction instruction = rhsInstructions.get(0);
             switch (instruction.type()) {
             case PUSH:
                 return instruction.term();
             case SUBST:
-                Term var = instruction.term();
+                Variable var = (Variable) instruction.term();
                 Term content = solution.get(var);
                 if (content == null) {
                     content = var;
                 }
                 return content;
-            default:
-                throw new AssertionError("unreachable");
             }
         }
 
@@ -207,9 +207,11 @@ public class KAbstractRewriteMachine {
                     stack.push(builder4.build());
                     break;
                 case CELL_COLLECTION:
-                    CellCollection.Builder builder5 = CellCollection.builder(context.definition());
+                    CellCollection.Builder builder5 = CellCollection.builder(
+                            constructor.cellCollectionSort(),
+                            context.definition());
                     for (CellLabel cellLabel : constructor.cellLabels()) {
-                        builder5.add(new Cell(cellLabel, stack.pop()));
+                        builder5.put(cellLabel, stack.pop());
                     }
                     for (int i = 0; i < constructor.size1(); i++) {
                         builder5.concatenate(stack.pop());
@@ -255,14 +257,11 @@ public class KAbstractRewriteMachine {
             Profiler.startTimer(Profiler.PATTERN_MATCH_TIMER);
             /* there should be no AC-matching under the crntCell (violated rule
              * has been filtered out by the compiler) */
-            Map<Variable, Term> subst = patternMatcher.patternMatch(
-                    crntCell.content(),
-                    getReadCellLHS(cellLabel));
-
-            if (subst == null) {
+            if (!matcher.patternMatch(crntCell.content(), getReadCellLHS(cellLabel))) {
                 success = false;
             } else {
-                Substitution<Variable, Term> composedSubst = fExtSubst.substitution().plusAll(subst);
+                Substitution<Variable, Term> composedSubst = fExtSubst.substitution()
+                        .plusAll(matcher.substitution());
                 if (composedSubst == null) {
                     success = false;
                 } else {

@@ -1,14 +1,13 @@
 // Copyright (c) 2013-2015 K Team. All Rights Reserved.
 package org.kframework.backend.java.kil;
 
+import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.reflect.TypeToken;
 import com.google.inject.name.Names;
 import org.apache.commons.collections4.trie.PatriciaTrie;
 import org.apache.commons.lang3.tuple.Pair;
-import org.kframework.backend.java.symbolic.Matcher;
 import org.kframework.backend.java.symbolic.Transformer;
-import org.kframework.backend.java.symbolic.Unifier;
 import org.kframework.backend.java.symbolic.Visitor;
 import org.kframework.backend.java.util.MapCache;
 import org.kframework.kil.ASTNode;
@@ -191,16 +190,6 @@ public class KLabelConstant extends KLabel implements MaximalSharing, org.kframe
     }
 
     @Override
-    public void accept(Unifier unifier, Term pattern) {
-        unifier.unify(this, pattern);
-    }
-
-    @Override
-    public void accept(Matcher matcher, Term pattern) {
-        matcher.match(this, pattern);
-    }
-
-    @Override
     public void accept(Visitor visitor) {
         visitor.visit(this);
     }
@@ -240,9 +229,10 @@ public class KLabelConstant extends KLabel implements MaximalSharing, org.kframe
      */
     public Multimap<Integer, Integer> getBinderMap() {
         if (isBinder()) {
-            return productionAttributes.getAttr(Attribute.Key.get(
+            Multimap<Integer, Integer> binder = productionAttributes.getAttr(Attribute.Key.get(
                     new TypeToken<Multimap<Integer, Integer>>() {},
                     Names.named("binder")));
+            return binder == null ? ImmutableMultimap.of(0, 1) : binder;
         } else {
             return null;
         }

@@ -6,12 +6,16 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import org.kframework.compile.ConfigurationInfo;
 import org.kframework.kore.K;
+import org.kframework.kore.KApply;
 import org.kframework.kore.KLabel;
 import org.kframework.kore.Sort;
+import scala.Option;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import static org.kframework.Collections.*;
 import static org.kframework.kore.KORE.*;
 
 /**
@@ -28,9 +32,11 @@ class TestConfiguration implements ConfigurationInfo {
 
     Map<Sort, Multiplicity> multiplicities = Maps.newHashMap();
     Map<Sort, K> defaultCells = Maps.newHashMap();
-    Map<Sort, K> units = Maps.newHashMap();
+    Map<Sort, KApply> units = Maps.newHashMap();
     Map<Sort, KLabel> concats = Maps.newHashMap();
     Map<Sort, KLabel> cellLabels = Maps.newHashMap();
+    Map<Sort, KLabel> cellFragmentLabels = Maps.newHashMap();
+    Map<Sort, KLabel> cellAbsentLabels = Maps.newHashMap();
 
     public void addCell(String parent, String child, String label) {
         addCell(parent, child, label, Multiplicity.ONE);
@@ -43,6 +49,13 @@ class TestConfiguration implements ConfigurationInfo {
     }
     public void addCell(String parent, String child, String label, Multiplicity m, Sort contents) {
         if (parent != null) {
+            if (!children.containsKey(Sort(parent))) {
+                // create a fragment label for the parent cell.
+                cellFragmentLabels.put(Sort(parent),KLabel(cellLabels.get(Sort(parent)).name()+"-fragment"));
+            }
+            if (m != Multiplicity.STAR) {
+                cellAbsentLabels.put(Sort(child),KLabel("no"+child));
+            }
             parents.put(Sort(child), Sort(parent));
             children.put(Sort(parent), Sort(child));
             levels.put(Sort(child), 1 + levels.get(Sort(parent)));
@@ -57,10 +70,10 @@ class TestConfiguration implements ConfigurationInfo {
     }
 
     public void addDefault(String cell, K term) {
-        defaultCells.put(Sort(cell),term);
+        defaultCells.put(Sort(cell), term);
     }
 
-    public void addUnit(String cell, K term) { units.put(Sort(cell), term); }
+    public void addUnit(String cell, KApply term) { units.put(Sort(cell), term); }
 
     public void addConcat(String cell, KLabel label) { concats.put(Sort(cell), label); }
 
@@ -93,6 +106,11 @@ class TestConfiguration implements ConfigurationInfo {
     }
 
     @Override
+    public boolean isCellLabel(KLabel kLabel) {
+        return getCellSort(kLabel) != null;
+    }
+
+    @Override
     public boolean isLeafCell(Sort k) {
         return !children.containsKey(k) && isCell(k);
     }
@@ -111,6 +129,21 @@ class TestConfiguration implements ConfigurationInfo {
     public KLabel getCellLabel(Sort k) {
         return cellLabels.get(k);
     }
+
+    @Override
+    public Sort getCellSort(KLabel kLabel) {
+        if (kLabel != null) {
+            return cellLabels.entrySet().stream().filter(e -> kLabel.equals(e.getValue())).map(Map.Entry::getKey).findAny().orElseGet(null);
+        } else {
+            return null;
+        }
+    }
+
+    @Override
+    public KLabel getCellFragmentLabel(Sort k) { return cellFragmentLabels.get(k); }
+
+    @Override
+    public KLabel getCellAbsentLabel(Sort k) { return cellAbsentLabels.get(k); }
 
     @Override
     public K getDefaultCell(Sort k) {
@@ -133,8 +166,28 @@ class TestConfiguration implements ConfigurationInfo {
     }
 
     @Override
-    public K getUnit(Sort k) { return units.get(k); }
+    public Set<Sort> getCellSorts() {
+        return cellLabels.keySet();
+    }
+
+    @Override
+    public KApply getUnit(Sort k) { return units.get(k); }
 
     @Override
     public KLabel getConcat(Sort k) { return concats.get(k); }
+
+    @Override
+    public Option<Sort> getCellForConcat(KLabel concat) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Option<Sort> getCellForUnit(KApply unit) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public scala.collection.immutable.Set<Sort> getCellBagSortsOfCell(Sort k) {
+        return Set(Sort(k.name() + "Bag"));
+    }
 }

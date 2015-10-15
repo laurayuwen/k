@@ -63,7 +63,7 @@ public class KItem extends Term implements KItemRepresentation {
     private Boolean anywhereApplicable = null;
 
     public static KItem of(Term kLabel, Term kList, TermContext termContext) {
-           return of(kLabel, kList, termContext, null, null);
+        return of(kLabel, kList, termContext, null, null);
     }
 
     public static KItem of(Term kLabel, Term kList, TermContext termContext, Source source, Location location) {
@@ -76,11 +76,15 @@ public class KItem extends Term implements KItemRepresentation {
     }
 
     public KItem(Term kLabel, Term kList, Sort sort, boolean isExactSort) {
-        this(kLabel, kList, sort, isExactSort, Collections.singleton(sort));
+        this(kLabel, kList, sort, isExactSort, null, null);
     }
 
-    private KItem(Term kLabel, Term kList, Sort sort, boolean isExactSort, Set<Sort> possibleSorts) {
-        super(Kind.KITEM);
+    public KItem(Term kLabel, Term kList, Sort sort, boolean isExactSort, Source source, Location location) {
+        this(kLabel, kList, sort, isExactSort, Collections.singleton(sort), source, location);
+    }
+
+    private KItem(Term kLabel, Term kList, Sort sort, boolean isExactSort, Set<Sort> possibleSorts, Source source, Location location) {
+        super(Kind.KITEM, source, location);
         this.kLabel = kLabel;
         this.kList = kList;
         this.sort = sort;
@@ -88,17 +92,6 @@ public class KItem extends Term implements KItemRepresentation {
         this.possibleSorts = possibleSorts;
         this.termContext = null;
         this.enableCache = false;
-    }
-
-    private KItem(Term kLabel, Term kList, boolean enableCache, TermContext termContext, Source source, Location location) {
-        super(Kind.KITEM, source, location);
-        this.kLabel = kLabel;
-        this.kList = kList;
-        this.sort = null;
-        this.isExactSort = false;
-        this.possibleSorts = null;
-        this.termContext = termContext;
-        this.enableCache = enableCache;
     }
 
     private KItem(Term kLabel, Term kList, TermContext termContext, Stage stage, Source source, Location location) {
@@ -441,59 +434,34 @@ public class KItem extends Term implements KItemRepresentation {
 
 
                             Map<Variable, Term> solution;
-                            if (rule.getAttribute(Attribute.ASSOCIATIVE_KEY) == null ||
-                                    rule.getAttribute(Attribute.COMMUTATIVE_KEY) == null) {
-                                    /* Use the non-assoc pattern matcher unless explicitely specified*/
-                                solution = NonACPatternMatcher.match(kItem, rule, context);
-                                if (solution == null) {
-                                    continue;
-                                }
+                            List<Substitution<Variable, Term>> matches = PatternMatcher.match(kItem, rule, context);
+                            if (matches.isEmpty()) {
+                                continue;
                             } else {
-                                List<Substitution<Variable, Term>> matches = PatternMatcher.match(kItem, rule, context);
-                                if (matches.isEmpty()) {
-                                    continue;
-                                } else {
-                                    if (matches.size() > 1) {
-                                        if (javaOptions.deterministicFunctions) {
-                                            throw KEMException.criticalError("More than one possible match. " +
-                                                    "Function " + kLabelConstant + " might be non-deterministic.");
-                                        }
-                                        kem.registerInternalWarning("More than one possible match. " +
-                                                "Behaviors might be lost.");
+                                if (matches.size() > 1) {
+                                    if (javaOptions.deterministicFunctions) {
+                                        throw KEMException.criticalError("More than one possible match. " +
+                                                "Function " + kLabelConstant + " might be non-deterministic.");
                                     }
-                                    solution = matches.get(0);
+                                    kem.registerInternalWarning("More than one possible match. " +
+                                            "Behaviors might be lost.");
                                 }
+                                solution = matches.get(0);
                             }
 
-                            Term rightHandSide = rule.rightHandSide();
-                            if (!rule.freshVariables().isEmpty()) {
-                                // this opt. only makes sense when using pattern matching
-                                // because after unification variables can end up in the
-                                // constraint rather than in the form of substitution
-
-                                /* rename unbound variables */
-                                Map<Variable, Variable> freshSubstitution = Variable.getFreshSubstitution(rule.freshVariables());
-                                /* rename rule variables in the rule RHS */
-                                rightHandSide = rightHandSide.substituteWithBinders(freshSubstitution, context);
-                            }
-                            rightHandSide = KAbstractRewriteMachine.construct(rule.rhsInstructions(), solution, copyOnShareSubstAndEval ? rule.reusableVariables().elementSet() : null,
-                                    context, false);
+                            Term rightHandSide = KAbstractRewriteMachine.construct(
+                                    rule.rhsInstructions(),
+                                    solution,
+                                    copyOnShareSubstAndEval ? rule.reusableVariables().elementSet() : null,
+                                    context,
+                                    false);
 
                             if (rule.containsAttribute("owise")) {
-                                /*
-                                 * YilongL: consider applying ``owise'' rule only when the
-                                 * function is ground. This is fine because 1) it's OK not
-                                 * to fully evaluate non-ground function during kompilation;
-                                 * and 2) it's better to get stuck rather than to apply the
-                                 * wrong ``owise'' rule during execution.
-                                 */
-                                if (kItem.isGround()) {
-                                    if (owiseResult != null) {
-                                        throw KExceptionManager.criticalError("Found multiple [owise] rules for the function with KLabel " + kItem.kLabel, rule);
-                                    }
-                                    RuleAuditing.succeed(rule);
-                                    owiseResult = rightHandSide;
+                                if (owiseResult != null) {
+                                    throw KExceptionManager.criticalError("Found multiple [owise] rules for the function with KLabel " + kItem.kLabel, rule);
                                 }
+                                RuleAuditing.succeed(rule);
+                                owiseResult = rightHandSide;
                             } else {
                                 if (stage == Stage.REWRITING) {
                                     if (result != null && !result.equals(rightHandSide)) {
@@ -527,6 +495,33 @@ public class KItem extends Term implements KItemRepresentation {
                     if (result != null) {
                         return result;
                     } else if (owiseResult != null) {
+                        if (!kItem.isGround()) {
+                            if (context.global().stage != Stage.REWRITING) {
+                                return kItem;
+                            }
+
+                            /**
+                             * apply the "[owise]" rule only if this kItem does not unify with any
+                             * of the left-hand-sides of the other rules (no other rule may apply)
+                             */
+                            for (Rule rule : definition.functionRules().get(kLabelConstant)) {
+                                if (rule.containsAttribute("owise")) {
+                                    continue;
+                                }
+
+                                ConstrainedTerm subject = new ConstrainedTerm(
+                                        kItem.kList(),
+                                        context);
+                                ConstrainedTerm pattern = new ConstrainedTerm(
+                                        ((KItem) rule.leftHandSide()).kList(),
+                                        ConjunctiveFormula.of(context)
+                                                .add(rule.lookups())
+                                                .addAll(rule.requires()));
+                                if (!subject.unify(pattern, null, null, null).isEmpty()) {
+                                    return kItem;
+                                }
+                            }
+                        }
                         return owiseResult;
                     }
                 }
@@ -580,20 +575,26 @@ public class KItem extends Term implements KItemRepresentation {
                     System.err.println("\nAuditing " + rule + "...\n");
                 }
                 /* anywhere rules should be applied by pattern match rather than unification */
-                Map<Variable, Term> solution = NonACPatternMatcher.match(this, rule, context);
-                if (solution != null) {
-                    RuleAuditing.succeed(rule);
-                    Term rightHandSide = rule.rightHandSide();
-                    if (copyOnShareSubstAndEval) {
-                        rightHandSide = rightHandSide.copyOnShareSubstAndEval(
-                                solution,
-                                rule.reusableVariables().elementSet(),
-                                context);
-                    } else {
-                        rightHandSide = rightHandSide.substituteAndEvaluate(solution, context);
-                    }
-                    return rightHandSide;
+                Map<Variable, Term> solution;
+                List<Substitution<Variable, Term>> matches = PatternMatcher.match(this, rule, context);
+                if (matches.isEmpty()) {
+                    continue;
+                } else {
+                    assert matches.size() == 1 : "unexpected non-deterministic anywhere rule " + rule;
+                    solution = matches.get(0);
                 }
+
+                RuleAuditing.succeed(rule);
+                Term rightHandSide = rule.rightHandSide();
+                if (copyOnShareSubstAndEval) {
+                    rightHandSide = rightHandSide.copyOnShareSubstAndEval(
+                            solution,
+                            rule.reusableVariables().elementSet(),
+                            context);
+                } else {
+                    rightHandSide = rightHandSide.substituteAndEvaluate(solution, context);
+                }
+                return rightHandSide;
             } finally {
                 if (RuleAuditing.isAuditBegun()) {
                     if (RuleAuditing.getAuditingRule() == rule) {
@@ -679,16 +680,6 @@ public class KItem extends Term implements KItemRepresentation {
     @Override
     public String toString() {
         return kLabel + "(" + kList.toString() + ")";
-    }
-
-    @Override
-    public void accept(Unifier unifier, Term pattern) {
-        unifier.unify(this, pattern);
-    }
-
-    @Override
-    public void accept(Matcher matcher, Term pattern) {
-        matcher.match(this, pattern);
     }
 
     @Override

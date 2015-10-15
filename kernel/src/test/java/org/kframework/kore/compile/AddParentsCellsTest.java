@@ -5,7 +5,11 @@ package org.kframework.kore.compile;
 
 import com.google.common.collect.Lists;
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.kframework.builtin.KLabels;
+import org.kframework.builtin.Labels;
 import org.kframework.compile.ConfigurationInfo;
 import org.kframework.compile.LabelInfo;
 import org.kframework.kil.Attribute;
@@ -18,6 +22,9 @@ import static org.kframework.kore.KORE.*;
 import static org.kframework.compile.ConfigurationInfo.Multiplicity.*;
 
 public class AddParentsCellsTest {
+    @Rule
+    public final ExpectedException exception = ExpectedException.none();
+
     final ConfigurationInfo cfgInfo = new TestConfiguration() {{
         addCell(null, "TCell", "<T>");
         addCell("TCell", "TSCell", "<ts>");
@@ -202,6 +209,21 @@ public class AddParentsCellsTest {
         Assert.assertEquals(expected, pass.concretize(term));
     }
 
+    @Test
+    public void testNonCellItem() {
+        K term = cell("<T>", KApply(KLabel(".K")), cell("<k>",KVariable("X")));
+        K expected = cell("<T>",cells(KApply(KLabel(".K")), cell("<ts>", cell("<t>", cell("<k>", KVariable("X"))))));
+        Assert.assertEquals(expected, pass.concretize(term));
+    }
+
+    @Test
+    public void testNonCellItemRewrite() {
+        K term = cell("<T>", KRewrite(KApply(KLabel("label")),cells(KApply(KLabel(".K")), cell("<k>",KVariable("X")))));
+        exception.expect(KEMException.class);
+        exception.expectMessage("Can't mix items with different parent cells under a rewrite");
+        pass.concretize(term);
+    }
+
     KApply cell(String name, K... ks) {
         return cell(name, false, false, ks);
     }
@@ -210,6 +232,6 @@ public class AddParentsCellsTest {
     }
 
     KApply cells(K... ks) {
-        return KApply(KLabel("#cells"), ks);
+        return KApply(KLabel(KLabels.CELLS), ks);
     }
 }

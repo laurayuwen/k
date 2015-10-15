@@ -22,6 +22,10 @@ public class KEMException extends RuntimeException {
         this.exception = e;
     }
 
+    public static KEMException debuggerError(String message) {
+        return create(ExceptionType.ERROR, KExceptionGroup.DEBUGGER, message, null, null, null);
+    }
+
     public static KEMException criticalError(String message) {
         return create(ExceptionType.ERROR, KExceptionGroup.CRITICAL, message, null, null, null);
     }
@@ -38,6 +42,11 @@ public class KEMException extends RuntimeException {
         return create(ExceptionType.ERROR, KExceptionGroup.CRITICAL, message, null, node.att().getOptional(Location.class).orElse(null), node.att().getOptional(Source.class).orElse(null));
     }
 
+    public static KEMException criticalError(String message, K node) {
+        return create(ExceptionType.ERROR, KExceptionGroup.CRITICAL, message, null, node.att().getOptional(Location.class).orElse(null), node.att().getOptional(Source.class).orElse(null));
+    }
+
+
     public static KEMException criticalError(String message, Throwable e, Location loc, Source source) {
         return create(ExceptionType.ERROR, KExceptionGroup.CRITICAL, message, e, loc, source);
     }
@@ -48,6 +57,10 @@ public class KEMException extends RuntimeException {
 
     public static KEMException internalError(String message, Throwable e) {
         return create(ExceptionType.ERROR, KExceptionGroup.INTERNAL, message, e, null, null);
+    }
+
+    public static KEMException internalError(String message, K node) {
+        return create(ExceptionType.ERROR, KExceptionGroup.INTERNAL, message, null, node.att().getOptional(Location.class).orElse(null), node.att().getOptional(Source.class).orElse(null));
     }
 
     public static KEMException compilerError(String message) {
