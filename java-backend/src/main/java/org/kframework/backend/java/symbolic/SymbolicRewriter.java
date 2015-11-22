@@ -173,7 +173,12 @@ public class SymbolicRewriter {
             Substitution<Variable, Term> substitution = RewriteEngineUtils.evaluateConditions(rule, pair.getLeft(), subject.termContext());
             if (substitution != null) {
                 // start the optimized substitution
-
+                // instantiateFreshVar
+                for (Variable variable : rule.freshConstants()) {
+                     ConjunctiveFormula.of(subject.termContext()).add(
+                            variable,
+                            FreshOperations.freshOfSort(variable.sort(), ConjunctiveFormula.of(subject.termContext()).termContext()));
+                }
                 // get a map from AST paths to (fine-grained, inner) rewrite RHSs
                 Map<scala.collection.immutable.List<Integer>, Term> rewrites = theFastMatcher.getRewrites()[pair.getRight()];
 
@@ -294,6 +299,7 @@ public class SymbolicRewriter {
      * if the rule is not compiled for fast rewriting.
      * It uses build instructions, if the rule is compiled for fast rewriting.
      */
+
     public static ConstrainedTerm buildResult(
             Rule rule,
             ConjunctiveFormula constraint,
