@@ -1,6 +1,6 @@
 // Copyright (c) 2012-2015 K Team. All Rights Reserved.
-require "modules/pattern-matching.k"
-
+require "pattern-matching.k"
+require "domains.k"
 /*!
 \title{FUN --- Untyped --- Environment}
 \author{Grigore Ro\c{s}u and Traian Florin \c{S}erb\u{a}nu\c{t}\u{a}
@@ -112,8 +112,13 @@ functional or \K features that have already been explained in there.}  */
 
 
 //@ \section{Syntax}
-
 module FUN-UNTYPED-SYNTAX
+  imports FUN-UNTYPED-COMMON
+  imports ID
+endmodule
+
+module FUN-UNTYPED-COMMON
+  imports DOMAINS-COMMON
 
 /*@ FUN is an expression language.  The constructs below fall into
 several categories: names, arithmetic constructs, conventional
@@ -351,7 +356,7 @@ a constructor for function types:  */
 endmodule
 
 module FUN-UNTYPED-MACROS
-  imports FUN-UNTYPED-SYNTAX
+  imports FUN-UNTYPED-COMMON
 
 //@ \subsection{Desugaring macros}
 
@@ -400,8 +405,8 @@ definition of FUN is also available, but that drops the \texttt{\&}
 construct as explained above. */
 
 module FUN-UNTYPED
-  imports FUN-UNTYPED-SYNTAX
   imports FUN-UNTYPED-MACROS
+  imports DOMAINS
   imports PATTERN-MATCHING
 
 
@@ -504,7 +509,7 @@ free in the function body (we want static scoping in FUN). */
 /*@ \paragraph{Note:} The reader may want to get familiar with
 how the pre-defined pattern matching works before proceeding.
 The best way to do that is to consult
-\texttt{k/include/modules/pattern-matching.k}. */
+\texttt{k/include/pattern-matching.k}. */
 
 /*@ To set up the pattern matching mechanism we need to specify what K
 terms act as variables (for pattern matching, substitution, etc.).
