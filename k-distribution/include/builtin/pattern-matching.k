@@ -2,7 +2,6 @@
 require "domains.k"
 module PATTERN-MATCHING
   imports K-EQUAL
-  imports ID
 
 // adapted from k-prelude.k
   syntax KItem ::= #map(Map)
@@ -59,6 +58,7 @@ module PATTERN-MATCHING
 ***********/
 
   // Subsorting ids to variables for matching purposes.
+  syntax Id
   syntax Variable ::= Id
 
   syntax KItem ::= #patternMatch(KList, KList)   [function]
