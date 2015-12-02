@@ -115,6 +115,10 @@ functional or \K features that have already been explained in there.}  */
 module FUN-UNTYPED-SYNTAX
   imports FUN-UNTYPED-COMMON
   imports ID
+  syntax Name ::= Token{[a-z][\_a-zA-Z0-9]*}            [notInRules, autoReject, token, regex("[a-z][\\_a-zA-Z0-9]*")]
+  syntax ConstructorName ::= Token{[A-Z][a-zA-Z0-9]*}   [notInRules, token, autoReject]
+  syntax TypeVar  ::= Token{[\'][a-z][\_a-zA-Z0-9]*}    [notInRules, autoReject, token, regex("[\\'][a-z][\\_a-zA-Z0-9]*")]
+  syntax TypeName ::= Token{[a-z][\_a-zA-Z0-9]*}        [notInRules, autoReject, token, regex("[a-z][\\_a-zA-Z0-9]*")]
 endmodule
 
 module FUN-UNTYPED-COMMON
@@ -140,7 +144,7 @@ with the former category.  We prefer the names of variables and functions
 to start with lower case letters.  We take the freedom to tacitly introduce
 syntactic lists/sequences for each nonterminal for which we need them: */
 
-  syntax Name ::= Token{[a-z][\_a-zA-Z0-9]*}       [notInRules, autoReject, token, regex("[a-z][\\_a-zA-Z0-9]*")]
+  syntax Name// ::= Token{[a-z][\_a-zA-Z0-9]*}       [notInRules, autoReject, token, regex("[a-z][\\_a-zA-Z0-9]*")]
   syntax Names ::= List{Name,","}
 
 /*@ Expression constructs will be defined throughtout the syntax module.
@@ -214,7 +218,7 @@ to the expression {\tt a}.  Also, note that the constructor is strict
 in its second argument, because we want to evaluate its arguments but
 not the constuctor name itsef. */
 
-  syntax ConstructorName ::= Token{[A-Z][a-zA-Z0-9]*}   [notInRules, token, autoReject]
+  syntax ConstructorName// ::= Token{[A-Z][a-zA-Z0-9]*}   [notInRules, token, autoReject]
   syntax Exp ::= ConstructorName
                | ConstructorName "(" Exps ")"    [prefer, strict(2)]
 
@@ -318,7 +322,7 @@ in datatype declarations.
 Like in many functional languages, type parameters/variables in
 user-defined types are quoted identifiers. */
 
-  syntax TypeVar  ::= Token{[\'][a-z][\_a-zA-Z0-9]*}    [notInRules, autoReject, token, regex("[\\'][a-z][\\_a-zA-Z0-9]*")]
+  syntax TypeVar//  ::= Token{[\'][a-z][\_a-zA-Z0-9]*}    [notInRules, autoReject, token, regex("[\\'][a-z][\\_a-zA-Z0-9]*")]
   syntax TypeVars ::= List{TypeVar,","}
 
 /*@ Types can be basic types, function types, or user-defined
@@ -328,7 +332,7 @@ for generating the desired parser.  To avoid syntactic ambiguities with
 the arrow construct for function cases, we use the symbol \verb|-->| as
 a constructor for function types:  */
 
-  syntax TypeName ::= Token{[a-z][\_a-zA-Z0-9]*}        [notInRules, autoReject, token, regex("[a-z][\\_a-zA-Z0-9]*")]
+  syntax TypeName// ::= Token{[a-z][\_a-zA-Z0-9]*}        [notInRules, autoReject, token, regex("[a-z][\\_a-zA-Z0-9]*")]
   syntax Type ::= "int" | "bool" | "string"
                 | Type "-->" Type                            [right]
                 | "(" Type ")"                             [bracket]
@@ -388,7 +392,7 @@ so we can easily recognize them when we debug or trace the semantics. */
 
 //@ For uniformity, we reduce all types to their general form:
   rule 'TypeName(Tn:TypeName) => (.TypeVars) Tn              [macro]
-  rule 'Type-TypeName(T:Type,,Tn:TypeName) => (T) Tn         [macro]
+  rule 'Type-TypeName(T:Type, Tn:TypeName) => (T) Tn         [macro]
 
 //@ The dynamic semantics ignores all the type declarations:
 
