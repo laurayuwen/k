@@ -193,34 +193,45 @@ In such cases, logic programming languages do not terminate.  While
 one may devise techniques to detect non-termination in some cases,
 one cannot do it in general (same like for all Turing-complete
 languages).  */
+require "domains.k"
+require "unification.k"
 
-require "modules/unification.k"
+module LOGIK-SYNTAX
+  imports LOGIK-COMMON
+
+  /*@ Variables and literals are defined as tokens following the conventions
+  used in Prolog (variables start with \_ or capital letter, while literals
+  start with lower case letters): */
+
+    syntax Term ::= Token{[\_A-Z][a-zA-Z0-9\_]*}                   [variable, onlyLabel, autoReject, token]
+    syntax Literal ::= Token{[a-z][a-zA-Z0-9\_]*}                  [onlyLabel, autoReject, token]
+
+endmodule
+
+module LOGIK-COMMON
+  imports DOMAINS-COMMON
+  /*@ \section{Syntax}
+  The syntax of LOGIK is straightforward: a program is a sequence of
+  Horn clauses followed by a query: */
+
+    syntax Literal
+
+    syntax Term ::= Literal | Literal "(" Terms ")"
+    syntax Terms ::= List{Term,","}
+    syntax Clause ::= Term ":-" Terms "." | Term "."
+    syntax Query ::= "?-" Terms "."
+    syntax Pgm ::= Query | Clause Pgm
+
+endmodule
 
 module LOGIK
+  imports LOGIK-COMMON
+  imports DOMAINS
   imports UNIFICATION
 
 /*@ Unification is at the core of logic programming.  Here we are
 going to use the predefined unification procedure (the same one we
 used in the type inferencers in Tutorial 5). */
-
-/*@ \section{Syntax}
-
-The syntax of LOGIK is straightforward: a program is a sequence of
-Horn clauses followed by a query: */
-
-  syntax Term ::= Literal | Literal "(" Terms ")"
-  syntax Terms ::= List{Term,","}
-  syntax Clause ::= Term ":-" Terms "." | Term "."
-  syntax Query ::= "?-" Terms "."
-  syntax Pgm ::= Query | Clause Pgm
-
-/*@ Variables and literals are defined as tokens following the conventions
-used in Prolog (variables start with \_ or capital letter, while literals
-start with lower case letters): */
-
-
-  syntax Term ::= Token{[\_A-Z][a-zA-Z0-9\_]*}                   [variable, onlyLabel, autoReject, token]
-  syntax Literal ::= Token{[a-z][a-zA-Z0-9\_]*}                  [onlyLabel, autoReject, token]
 
 /*@ \section{Configuration}
 
@@ -237,7 +248,6 @@ discard the main cell. */
   configuration <T color="yellow" multiplicity="?">
                   <k color="green"> $PGM:Pgm </k>
                   <fresh color="orange"> .K </fresh>
-                  <br/>
                   <clauses color="red">
                     <clause color="pink" multiplicity="*"> .K </clause>
                   </clauses>
@@ -265,14 +275,14 @@ can safely regard clauses as ``clause schemas'' comprising infinitely
 many instances, one for each context.  */
 
   rule <k> C:Clause Pgm => Pgm </k>
-       (. => <clause> #renameVariables(C) </clause>)
+       `.Bag => <clause> #renameVariables(C) </clause>`
 
   rule <k> ?- Ls:Terms. => Ls ...</k>
        <mgu> _ => #variablesMap(#variables(Ls)) </mgu>
 
 //@ We also sequentialize the goals for easier processing:
   rule L:Term, Ls:Terms => L ~> Ls
-  rule .Terms => .
+  rule .Terms => .K
 
 /*@ When all the goals are solved, indicated by the empty \textsf{k}
 cell, the calculated most general unifier (mgu) is in the \textsf{mgu}
@@ -280,7 +290,7 @@ cell.  In that case, to ease reading of the final solution we move the
 mgu in the \textsf{solution} cell and delete the rest of the
 configuration: */
 
-rule <T>... <k> . </k> <mgu> Theta </mgu> ...</T>
+rule <T>... <k> .K </k> <mgu> Theta </mgu> ...</T>
   => <solution> Theta </solution>
 
 /*@ Since we are not interested in seeing the failed attempts to solve
@@ -318,7 +328,7 @@ goals.*/
 /*@ Pick a clause and generate a fresh instance of it when the
 \textsf{fresh} cell is empty: */
 
-  rule <fresh> . => #renameVariables(C) </fresh> <clause> C </clause>
+  rule <fresh> .K => #renameVariables(C) </fresh> <clause> C </clause>
        <k> T:Term ...</k>
   requires #unifiable(T,head(C))
     [transition]
@@ -331,11 +341,11 @@ goals.*/
 with the clause body, and empty the \textsf{fresh} cell (so that
 another clause can be chosen using the rule above):  */
 
-  rule <k> L:Term => . ...</k>
-       <fresh>  L:Term . => . </fresh>
+  rule <k> L:Term => .K ...</k>
+       <fresh>  L:Term . => .K </fresh>
 
   rule <k> L:Term => Ls ...</k>
-       <fresh>  L:Term :- Ls:Terms. => . </fresh>
+       <fresh>  L:Term :- Ls:Terms. => .K </fresh>
 
 /*@ Note that there is no problem if a clause is chosen whose
 conclusion literal does not unify with the first goal literal.
