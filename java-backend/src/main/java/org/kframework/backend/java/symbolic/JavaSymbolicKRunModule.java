@@ -65,6 +65,7 @@ public class JavaSymbolicKRunModule extends AbstractModule {
                     ToolActivation.class, ExecutionMode.class);
 
             executionBinder.addBinding(new ToolActivation.OptionActivation("--prove")).to(ProofExecutionMode.class);
+            executionBinder.addBinding(new ToolActivation.OptionActivation("--testgen")).to(TestGenExecutionMode.class);
 
         }
     }

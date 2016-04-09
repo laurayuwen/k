@@ -287,5 +287,8 @@ public final class KRunOptions {
 
         @Parameter(names="--profile", description="Run krun multiple times to gather better performance metrics.")
         public int profile = 1;
+
+        @Parameter(names="--testgen", description="Generate test programs for the kompiled semantics.")
+        public boolean testgen = false;
     }
 }
